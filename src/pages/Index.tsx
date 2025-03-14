@@ -5,6 +5,7 @@ import APIConfigForm from '@/components/APIConfigForm';
 import SchemaMapper from '@/components/SchemaMapper';
 import EndpointTester from '@/components/EndpointTester';
 import MappingPreview from '@/components/MappingPreview';
+import APIHistory from '@/components/APIHistory';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiService, APIConfig } from '@/utils/apiService';
 import { scimUtils } from '@/utils/scimUtils';
@@ -200,6 +201,7 @@ const Index = () => {
               <>
                 <MappingPreview mappings={mappings} />
                 <EndpointTester isConfigured={isConfigured} />
+                <APIHistory />
               </>
             ) : (
               <div className="bg-muted/30 rounded-lg border border-border p-6 text-center">
@@ -314,10 +316,11 @@ const Index = () => {
   const renderTabContent = () => (
     <div className="w-full max-w-7xl mx-auto px-4 md:px-6 py-6 animate-fade-in">
       <Tabs defaultValue="configure" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="configure">Configure</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
           <TabsTrigger value="test">Test</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
         <TabsContent value="configure" className="space-y-6 pt-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -339,6 +342,9 @@ const Index = () => {
         </TabsContent>
         <TabsContent value="test" className="pt-6">
           <EndpointTester isConfigured={isConfigured} />
+        </TabsContent>
+        <TabsContent value="history" className="pt-6">
+          <APIHistory />
         </TabsContent>
       </Tabs>
     </div>

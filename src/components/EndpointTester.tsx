@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { CheckCircle2, Clock, Play, RefreshCw, Search, User } from "lucide-react";
 import { toast } from "sonner";
+import { apiService } from '@/utils/apiService';
+import { scimUtils } from '@/utils/scimUtils';
 
 interface EndpointTesterProps {
   isConfigured: boolean;
@@ -17,11 +19,13 @@ interface EndpointTesterProps {
 
 const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
   const [operation, setOperation] = useState('get');
+  const [endpoint, setEndpoint] = useState('/users');
   const [resourceType, setResourceType] = useState('Users');
   const [filter, setFilter] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
   const [responseTime, setResponseTime] = useState<number | null>(null);
+  const [rawData, setRawData] = useState<any>(null);
   
   // Sample SCIM user for testing
   const sampleUserData = {
@@ -42,7 +46,7 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
     "externalId": "12345"
   };
   
-  const handleRunTest = () => {
+  const handleRunTest = async () => {
     if (!isConfigured) {
       toast.error('Configuration incomplete', {
         description: 'Please configure your API and schema mapping first.',
@@ -53,66 +57,93 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
     setIsLoading(true);
     setTestResults(null);
     setResponseTime(null);
+    setRawData(null);
     
     const startTime = performance.now();
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      let finalEndpoint = endpoint;
+      
+      // Add filter if applicable
+      if (operation === 'get' && filter) {
+        const separator = finalEndpoint.includes('?') ? '&' : '?';
+        finalEndpoint += `${separator}filter=${encodeURIComponent(filter)}`;
+      }
+      
+      // Make API request
+      let responseData;
+      
+      switch (operation) {
+        case 'get':
+          responseData = await apiService.fetchData(finalEndpoint);
+          break;
+          
+        case 'create':
+          responseData = await apiService.fetchData(finalEndpoint, {
+            method: 'POST',
+            body: JSON.stringify(sampleUserData)
+          });
+          break;
+          
+        case 'update':
+          responseData = await apiService.fetchData(`${finalEndpoint}/12345`, {
+            method: 'PUT',
+            body: JSON.stringify(sampleUserData)
+          });
+          break;
+          
+        case 'delete':
+          responseData = await apiService.fetchData(`${finalEndpoint}/12345`, {
+            method: 'DELETE'
+          });
+          break;
+      }
+      
+      // Calculate response time
       const endTime = performance.now();
       setResponseTime(Math.round(endTime - startTime));
       
-      // Sample test results
-      if (operation === 'get' && resourceType === 'Users') {
-        if (filter) {
-          setTestResults({
-            "totalResults": 1,
-            "itemsPerPage": 1,
-            "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-            "Resources": [sampleUserData]
-          });
-        } else {
-          setTestResults({
-            "totalResults": 2,
-            "itemsPerPage": 2,
-            "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-            "Resources": [
-              sampleUserData,
-              {
-                ...sampleUserData,
-                "userName": "jane.smith@example.com",
-                "name": {
-                  "givenName": "Jane",
-                  "familyName": "Smith"
-                },
-                "emails": [
-                  {
-                    "value": "jane.smith@example.com",
-                    "primary": true
-                  }
-                ],
-                "displayName": "Jane Smith",
-                "externalId": "67890"
-              }
-            ]
-          });
-        }
-      } else if (operation === 'create') {
-        setTestResults({
-          ...sampleUserData,
-          "id": "550e8400-e29b-41d4-a716-446655440000",
-          "meta": {
-            "created": new Date().toISOString(),
-            "lastModified": new Date().toISOString(),
-            "resourceType": "User"
+      // Store raw response
+      setRawData(responseData);
+      
+      // Transform to SCIM if needed
+      if (responseData) {
+        try {
+          // For list responses, we might need to handle arrays
+          if (operation === 'get' && Array.isArray(responseData)) {
+            const scimUsers = responseData.map(user => 
+              scimUtils.transformToScim(user, 'User')
+            );
+            
+            setTestResults({
+              "totalResults": scimUsers.length,
+              "itemsPerPage": scimUsers.length,
+              "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+              "Resources": scimUsers
+            });
+          } else {
+            // For single item responses
+            const scimData = scimUtils.transformToScim(responseData, 'User');
+            setTestResults(scimData);
           }
-        });
+        } catch (error) {
+          console.error('Error transforming to SCIM:', error);
+          // If transformation fails, show raw data
+          setTestResults(responseData);
+        }
       }
       
-      setIsLoading(false);
       toast.success('Test completed successfully', {
         description: `Operation completed in ${Math.round(endTime - startTime)}ms`,
       });
-    }, 1500);
+    } catch (error) {
+      console.error('API test failed:', error);
+      toast.error('Test failed', {
+        description: error instanceof Error ? error.message : 'Unknown error during API test',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   return (
@@ -123,7 +154,7 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
           <span>Endpoint Tester</span>
         </CardTitle>
         <CardDescription>
-          Test your SCIM endpoints with sample operations.
+          Test your API endpoints with SCIM mapping.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -147,7 +178,17 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="resourceType">Resource Type</Label>
+            <Label htmlFor="endpoint">API Endpoint</Label>
+            <Input
+              id="endpoint"
+              placeholder="/users"
+              value={endpoint}
+              onChange={(e) => setEndpoint(e.target.value)}
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="resourceType">SCIM Resource Type</Label>
             <Select
               value={resourceType}
               onValueChange={setResourceType}
@@ -171,7 +212,7 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="filter"
-                  placeholder="userName eq 'john.doe'"
+                  placeholder="name=John"
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                   className="pl-9"
@@ -227,13 +268,14 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
                 <TabsList>
                   <TabsTrigger value="formatted" className="text-xs px-2 py-1 h-7">Formatted</TabsTrigger>
                   <TabsTrigger value="raw" className="text-xs px-2 py-1 h-7">Raw</TabsTrigger>
+                  <TabsTrigger value="source" className="text-xs px-2 py-1 h-7">Source</TabsTrigger>
                 </TabsList>
               </div>
               
               <TabsContent value="formatted">
                 <div className="bg-muted/50 rounded-md p-4 font-mono text-sm">
                   <ScrollArea className="h-60">
-                    {operation === 'get' && resourceType === 'Users' && testResults.Resources && (
+                    {operation === 'get' && testResults.Resources && (
                       <div className="space-y-4">
                         <p className="text-sm text-muted-foreground mb-2">
                           Found {testResults.totalResults} users
@@ -242,15 +284,15 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
                           <div key={index} className="border border-border rounded-md p-3 bg-background/50">
                             <div className="flex items-center gap-2 mb-2">
                               <User className="h-4 w-4 text-primary" />
-                              <span className="font-semibold">{user.displayName}</span>
+                              <span className="font-semibold">{user.displayName || 'User'}</span>
                             </div>
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                               <div>Username:</div>
-                              <div>{user.userName}</div>
+                              <div>{user.userName || 'N/A'}</div>
                               <div>Name:</div>
-                              <div>{user.name.givenName} {user.name.familyName}</div>
+                              <div>{user.name?.givenName} {user.name?.familyName}</div>
                               <div>Email:</div>
-                              <div>{user.emails[0].value}</div>
+                              <div>{user.emails?.[0]?.value || 'N/A'}</div>
                               <div>Status:</div>
                               <div>
                                 {user.active ? (
@@ -260,32 +302,17 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
                                 )}
                               </div>
                               <div>External ID:</div>
-                              <div>{user.externalId}</div>
+                              <div>{user.externalId || 'N/A'}</div>
                             </div>
                           </div>
                         ))}
                       </div>
                     )}
-                    {operation === 'create' && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 mb-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                          <span className="font-semibold">User Created Successfully</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground mb-2">
-                          ID: {testResults.id}
-                        </div>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs border border-border rounded-md p-3 bg-background/50">
-                          <div>Username:</div>
-                          <div>{testResults.userName}</div>
-                          <div>Name:</div>
-                          <div>{testResults.name.givenName} {testResults.name.familyName}</div>
-                          <div>Email:</div>
-                          <div>{testResults.emails[0].value}</div>
-                          <div>Created:</div>
-                          <div>{testResults.meta?.created}</div>
-                        </div>
-                      </div>
+                    
+                    {operation !== 'get' && (
+                      <pre className="text-xs sm:text-sm">
+                        {JSON.stringify(testResults, null, 2)}
+                      </pre>
                     )}
                   </ScrollArea>
                 </div>
@@ -296,6 +323,16 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
                   <ScrollArea className="h-60">
                     <pre className="text-xs sm:text-sm">
                       {JSON.stringify(testResults, null, 2)}
+                    </pre>
+                  </ScrollArea>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="source">
+                <div className="bg-muted/50 rounded-md p-4 font-mono text-sm">
+                  <ScrollArea className="h-60">
+                    <pre className="text-xs sm:text-sm">
+                      {JSON.stringify(rawData, null, 2)}
                     </pre>
                   </ScrollArea>
                 </div>

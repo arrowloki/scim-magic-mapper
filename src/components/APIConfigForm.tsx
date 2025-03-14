@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,18 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { ArrowRight, Check, Database, Key, Lock, RefreshCw } from "lucide-react";
-
-interface APIConfig {
-  name: string;
-  baseUrl: string;
-  authType: string;
-  apiKey?: string;
-  username?: string;
-  password?: string;
-  tokenUrl?: string;
-  clientId?: string;
-  clientSecret?: string;
-}
+import { apiService, APIConfig } from '@/utils/apiService';
 
 interface APIConfigFormProps {
   onConfigSave: (config: APIConfig) => void;
@@ -36,6 +25,14 @@ const APIConfigForm: React.FC<APIConfigFormProps> = ({ onConfigSave }) => {
   
   const [isLoading, setIsLoading] = useState(false);
   
+  useEffect(() => {
+    // Load existing configuration if available
+    const existingConfig = apiService.getConfig();
+    if (existingConfig) {
+      setConfig(existingConfig);
+    }
+  }, []);
+  
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setConfig(prev => ({ ...prev, [name]: value }));
@@ -45,20 +42,59 @@ const APIConfigForm: React.FC<APIConfigFormProps> = ({ onConfigSave }) => {
     setConfig(prev => ({ ...prev, authType: value }));
   };
   
-  const handleTestConnection = () => {
+  const handleTestConnection = async () => {
+    // Validate form first
+    if (!config.name || !config.baseUrl) {
+      toast.error('Missing required fields', {
+        description: 'Please fill in all required fields.',
+      });
+      return;
+    }
+    
+    // Additional validation based on auth type
+    if (config.authType === 'apiKey' && !config.apiKey) {
+      toast.error('API Key required', {
+        description: 'Please enter an API Key for API Key authentication.',
+      });
+      return;
+    } else if (config.authType === 'basic' && (!config.username || !config.password)) {
+      toast.error('Credentials required', {
+        description: 'Please enter both username and password for Basic authentication.',
+      });
+      return;
+    } else if (config.authType === 'oauth' && (!config.tokenUrl || !config.clientId || !config.clientSecret)) {
+      toast.error('OAuth details required', {
+        description: 'Please enter all OAuth configuration details.',
+      });
+      return;
+    }
+    
     setIsLoading(true);
     
-    // Simulate API connection test
-    setTimeout(() => {
-      setIsLoading(false);
-      toast.success('Connection successful!', {
-        description: 'Your API connection is working properly.',
-        action: {
-          label: 'Dismiss',
-          onClick: () => {},
-        },
+    try {
+      // Temporarily set the config for testing
+      apiService.setConfig(config);
+      
+      // Test the connection
+      const success = await apiService.testConnection();
+      
+      if (success) {
+        toast.success('Connection successful!', {
+          description: 'Your API connection is working properly.',
+        });
+      } else {
+        toast.error('Connection failed', {
+          description: 'Could not connect to the API. Please check your configuration.',
+        });
+      }
+    } catch (error) {
+      console.error('Test connection error:', error);
+      toast.error('Connection failed', {
+        description: error instanceof Error ? error.message : 'Unknown error during connection test',
       });
-    }, 1500);
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   const handleSave = () => {
@@ -74,6 +110,16 @@ const APIConfigForm: React.FC<APIConfigFormProps> = ({ onConfigSave }) => {
     if (config.authType === 'apiKey' && !config.apiKey) {
       toast.error('API Key required', {
         description: 'Please enter an API Key for API Key authentication.',
+      });
+      return;
+    } else if (config.authType === 'basic' && (!config.username || !config.password)) {
+      toast.error('Credentials required', {
+        description: 'Please enter both username and password for Basic authentication.',
+      });
+      return;
+    } else if (config.authType === 'oauth' && (!config.tokenUrl || !config.clientId || !config.clientSecret)) {
+      toast.error('OAuth details required', {
+        description: 'Please enter all OAuth configuration details.',
       });
       return;
     }
@@ -124,7 +170,7 @@ const APIConfigForm: React.FC<APIConfigFormProps> = ({ onConfigSave }) => {
         
         <div className="space-y-2">
           <Label>Authentication</Label>
-          <Tabs defaultValue="apiKey" onValueChange={handleAuthTypeChange} className="w-full">
+          <Tabs defaultValue={config.authType} onValueChange={handleAuthTypeChange} className="w-full">
             <TabsList className="grid grid-cols-3 mb-4">
               <TabsTrigger value="apiKey">API Key</TabsTrigger>
               <TabsTrigger value="basic">Basic Auth</TabsTrigger>
@@ -142,7 +188,7 @@ const APIConfigForm: React.FC<APIConfigFormProps> = ({ onConfigSave }) => {
                   name="apiKey"
                   type="password"
                   placeholder="sk_123abc..."
-                  value={config.apiKey}
+                  value={config.apiKey || ''}
                   onChange={handleChange}
                   className="font-mono"
                 />
