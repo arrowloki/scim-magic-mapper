@@ -115,7 +115,7 @@ const APIHistoryComponent: React.FC = () => {
                     <TableCell>{item.status > 0 ? item.status : 'N/A'}</TableCell>
                     <TableCell>{formatDuration(item.duration)}</TableCell>
                     <TableCell>
-                      <Badge variant={item.success ? 'success' : 'destructive'}>
+                      <Badge variant={item.success ? 'secondary' : 'destructive'}>
                         {item.success ? 'Success' : 'Failed'}
                       </Badge>
                     </TableCell>
