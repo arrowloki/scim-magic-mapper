@@ -38,11 +38,11 @@ interface SchemaMapperProps {
 
 const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
   const [mappings, setMappings] = useState<MappingItem[]>([
-    { scimAttribute: 'userName', sourceField: 'username', isRequired: true },
-    { scimAttribute: 'name.givenName', sourceField: 'firstName', isRequired: true },
-    { scimAttribute: 'name.familyName', sourceField: 'lastName', isRequired: true },
-    { scimAttribute: 'emails[0].value', sourceField: 'email', isRequired: true },
-    { scimAttribute: 'active', sourceField: 'isActive', isRequired: false, transformation: 'Boolean(value)' },
+    { scimAttribute: 'userName', sourceField: '', isRequired: true },
+    { scimAttribute: 'name.givenName', sourceField: '', isRequired: true },
+    { scimAttribute: 'name.familyName', sourceField: '', isRequired: true },
+    { scimAttribute: 'emails[0].value', sourceField: '', isRequired: true },
+    { scimAttribute: 'active', sourceField: '', isRequired: false },
   ]);
   
   const [isLoading, setIsLoading] = useState(false);
@@ -55,7 +55,7 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
       try {
         setIsLoadingFields(true);
         // Fetch a sample user from the dummy API
-        const response = await apiService.fetchData('1', { method: 'GET' });
+        const response = await apiService.fetchData('users/1', { method: 'GET' });
         
         if (response) {
           // Extract the keys from the response and format them
@@ -69,6 +69,9 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
           toast.success('Source fields loaded', {
             description: `${fields.length} fields discovered from the API.`,
           });
+          
+          // Set default mappings based on the response
+          updateDefaultMappings(response);
         }
       } catch (error) {
         console.error('Failed to load source fields:', error);
@@ -94,6 +97,42 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
 
     fetchSourceFields();
   }, []);
+  
+  // Update default mappings based on the API response
+  const updateDefaultMappings = (userResponse: any) => {
+    const newMappings = [...mappings];
+    
+    // Try to match SCIM attributes with API fields
+    if (userResponse.username) {
+      const index = newMappings.findIndex(m => m.scimAttribute === 'userName');
+      if (index >= 0) newMappings[index].sourceField = 'username';
+    }
+    
+    if (userResponse.firstName) {
+      const index = newMappings.findIndex(m => m.scimAttribute === 'name.givenName');
+      if (index >= 0) newMappings[index].sourceField = 'firstName';
+    }
+    
+    if (userResponse.lastName) {
+      const index = newMappings.findIndex(m => m.scimAttribute === 'name.familyName');
+      if (index >= 0) newMappings[index].sourceField = 'lastName';
+    }
+    
+    if (userResponse.email) {
+      const index = newMappings.findIndex(m => m.scimAttribute === 'emails[0].value');
+      if (index >= 0) newMappings[index].sourceField = 'email';
+    }
+    
+    if ('active' in userResponse) {
+      const index = newMappings.findIndex(m => m.scimAttribute === 'active');
+      if (index >= 0) {
+        newMappings[index].sourceField = 'active';
+        newMappings[index].transformation = 'Boolean(value)';
+      }
+    }
+    
+    setMappings(newMappings);
+  };
   
   const handleAddMapping = () => {
     const unmappedScimAttr = scimAttributes.find(attr => 

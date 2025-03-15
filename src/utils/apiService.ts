@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 
 export interface APIConfig {
@@ -353,14 +352,19 @@ export class APIService {
     
     // Handle special case for dummyjson.com
     if (url.includes('dummyjson.com')) {
-      // If endpoint is a number, it's a user ID
-      if (/^\d+$/.test(endpoint)) {
-        return `${url}/${endpoint}`;
+      // For dummyjson.com, handle endpoints a bit differently
+      // If the baseUrl already includes '/users', we need to be careful not to duplicate it
+      
+      // If the baseUrl ends with '/users' and the endpoint is 'users/1', don't duplicate 'users'
+      if (url.endsWith('/users') && endpoint.startsWith('users/')) {
+        // Extract the ID or other path part after 'users/'
+        const restOfEndpoint = endpoint.substring('users/'.length);
+        return `${url}/${restOfEndpoint}`;
       }
       
-      // If URL already ends with the endpoint (like /users), don't add it again
-      if (url.endsWith(`/${endpoint}`)) {
-        return url;
+      // If endpoint is just a number, assume it's a user ID
+      if (/^\d+$/.test(endpoint)) {
+        return `${url}/${endpoint}`;
       }
     }
     
