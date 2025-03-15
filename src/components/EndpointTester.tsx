@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle2, Clock, AlertTriangle, Play, RefreshCw, Search, User } from "lucide-react";
+import { CheckCircle2, Clock, AlertTriangle, Play, RefreshCw, Search, User, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { apiService } from '@/utils/apiService';
 import { scimUtils } from '@/utils/scimUtils';
@@ -27,6 +27,7 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
   const [responseTime, setResponseTime] = useState<number | null>(null);
   const [rawData, setRawData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isCopied, setIsCopied] = useState<{[key: string]: boolean}>({});
 
   useEffect(() => {
     setError(null);
@@ -161,6 +162,21 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
       setIsLoading(false);
     }
   };
+
+  const copyToClipboard = (text: string, section: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        setIsCopied({...isCopied, [section]: true});
+        toast.success('Copied to clipboard');
+        setTimeout(() => {
+          setIsCopied({...isCopied, [section]: false});
+        }, 2000);
+      })
+      .catch((err) => {
+        console.error('Failed to copy text: ', err);
+        toast.error('Failed to copy');
+      });
+  };
   
   return (
     <Card className="w-full shadow-card animate-scale-in">
@@ -247,6 +263,14 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
                   {JSON.stringify(sampleUserData, null, 2)}
                 </pre>
               </ScrollArea>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="absolute top-2 right-2 h-8 w-8"
+                onClick={() => copyToClipboard(JSON.stringify(sampleUserData, null, 2), 'payload')}
+              >
+                {isCopied['payload'] ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
             </div>
           </div>
         )}
@@ -302,6 +326,17 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
               
               <TabsContent value="formatted">
                 <div className="bg-muted/50 rounded-md p-4 font-mono text-sm">
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mb-2"
+                      onClick={() => copyToClipboard(JSON.stringify(testResults, null, 2), 'formatted')}
+                    >
+                      {isCopied['formatted'] ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                      Copy
+                    </Button>
+                  </div>
                   <ScrollArea className="h-60">
                     {operation === 'get' && testResults.Resources && (
                       <div className="space-y-4">
@@ -348,6 +383,17 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
               
               <TabsContent value="raw">
                 <div className="bg-muted/50 rounded-md p-4 font-mono text-sm">
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mb-2"
+                      onClick={() => copyToClipboard(JSON.stringify(testResults, null, 2), 'raw')}
+                    >
+                      {isCopied['raw'] ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                      Copy
+                    </Button>
+                  </div>
                   <ScrollArea className="h-60">
                     <pre className="text-xs sm:text-sm">
                       {JSON.stringify(testResults, null, 2)}
@@ -358,6 +404,17 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
               
               <TabsContent value="source">
                 <div className="bg-muted/50 rounded-md p-4 font-mono text-sm">
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mb-2"
+                      onClick={() => copyToClipboard(JSON.stringify(rawData, null, 2), 'source')}
+                    >
+                      {isCopied['source'] ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                      Copy
+                    </Button>
+                  </div>
                   <ScrollArea className="h-60">
                     <pre className="text-xs sm:text-sm">
                       {JSON.stringify(rawData, null, 2)}

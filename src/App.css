@@ -1,3 +1,4 @@
+
 #root {
   max-width: 1280px;
   margin: 0 auto;
@@ -12,10 +13,10 @@
   transition: filter 300ms;
 }
 .logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
+  filter: drop-shadow(0 0 2em rgba(79, 110, 233, 0.6));
 }
 .logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+  filter: drop-shadow(0 0 2em rgba(97, 218, 251, 0.6));
 }
 
 @keyframes logo-spin {
@@ -39,4 +40,33 @@
 
 .read-the-docs {
   color: #888;
+}
+
+/* Lovable.dev inspired styling */
+.lovable-gradient {
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+}
+
+.lovable-shadow {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+}
+
+.lovable-button {
+  background-color: #2563eb;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.lovable-button:hover {
+  background-color: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.lovable-card {
+  background-color: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
