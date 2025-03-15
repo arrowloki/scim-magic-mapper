@@ -351,6 +351,19 @@ export class APIService {
     
     let url = this.config.baseUrl;
     
+    // Handle special case for dummyjson.com
+    if (url.includes('dummyjson.com')) {
+      // If endpoint is a number, it's a user ID
+      if (/^\d+$/.test(endpoint)) {
+        return `${url}/${endpoint}`;
+      }
+      
+      // If URL already ends with the endpoint (like /users), don't add it again
+      if (url.endsWith(`/${endpoint}`)) {
+        return url;
+      }
+    }
+    
     // Remove trailing slash from base URL if present
     if (url.endsWith('/')) {
       url = url.slice(0, -1);

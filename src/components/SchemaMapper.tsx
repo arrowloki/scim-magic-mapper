@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowRight, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { apiService } from "@/utils/apiService";
 
 // Sample SCIM attributes
 const scimAttributes = [
@@ -22,18 +23,6 @@ const scimAttributes = [
   { id: 'active', name: 'Active Status', required: false },
   { id: 'externalId', name: 'External ID', required: false },
   { id: 'phoneNumbers[0].value', name: 'Phone Number', required: false },
-];
-
-// Sample source API fields (would come from API discovery)
-const sourceFields = [
-  { id: 'user_name', name: 'user_name' },
-  { id: 'first_name', name: 'first_name' },
-  { id: 'last_name', name: 'last_name' },
-  { id: 'email', name: 'email' },
-  { id: 'is_active', name: 'is_active' },
-  { id: 'phone', name: 'phone' },
-  { id: 'user_id', name: 'user_id' },
-  { id: 'profile_url', name: 'profile_url' },
 ];
 
 interface MappingItem {
@@ -49,14 +38,62 @@ interface SchemaMapperProps {
 
 const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
   const [mappings, setMappings] = useState<MappingItem[]>([
-    { scimAttribute: 'userName', sourceField: 'user_name', isRequired: true },
-    { scimAttribute: 'name.givenName', sourceField: 'first_name', isRequired: true },
-    { scimAttribute: 'name.familyName', sourceField: 'last_name', isRequired: true },
+    { scimAttribute: 'userName', sourceField: 'username', isRequired: true },
+    { scimAttribute: 'name.givenName', sourceField: 'firstName', isRequired: true },
+    { scimAttribute: 'name.familyName', sourceField: 'lastName', isRequired: true },
     { scimAttribute: 'emails[0].value', sourceField: 'email', isRequired: true },
-    { scimAttribute: 'active', sourceField: 'is_active', isRequired: false, transformation: 'Boolean(value)' },
+    { scimAttribute: 'active', sourceField: 'isActive', isRequired: false, transformation: 'Boolean(value)' },
   ]);
   
   const [isLoading, setIsLoading] = useState(false);
+  const [sourceFields, setSourceFields] = useState<{id: string, name: string}[]>([]);
+  const [isLoadingFields, setIsLoadingFields] = useState(false);
+  
+  // Fetch fields from the API
+  useEffect(() => {
+    const fetchSourceFields = async () => {
+      try {
+        setIsLoadingFields(true);
+        // Fetch a sample user from the dummy API
+        const response = await apiService.fetchData('1', { method: 'GET' });
+        
+        if (response) {
+          // Extract the keys from the response and format them
+          const fields = Object.keys(response).map(key => ({
+            id: key,
+            name: key
+          }));
+          
+          setSourceFields(fields);
+          console.log('Loaded source fields:', fields);
+          toast.success('Source fields loaded', {
+            description: `${fields.length} fields discovered from the API.`,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load source fields:', error);
+        toast.error('Failed to load fields', {
+          description: 'Could not fetch fields from the API. Please check your API configuration.',
+        });
+        
+        // Set default fields as fallback
+        setSourceFields([
+          { id: 'id', name: 'id' },
+          { id: 'username', name: 'username' },
+          { id: 'firstName', name: 'firstName' },
+          { id: 'lastName', name: 'lastName' },
+          { id: 'email', name: 'email' },
+          { id: 'phone', name: 'phone' },
+          { id: 'address', name: 'address' },
+          { id: 'age', name: 'age' },
+        ]);
+      } finally {
+        setIsLoadingFields(false);
+      }
+    };
+
+    fetchSourceFields();
+  }, []);
   
   const handleAddMapping = () => {
     const unmappedScimAttr = scimAttributes.find(attr => 
@@ -120,7 +157,7 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
       toast.success('Mappings saved successfully', {
         description: 'Your schema mappings have been saved and are ready to use.',
       });
-    }, 1000);
+    }, 500);
   };
   
   const getScimAttributeName = (id: string) => {
@@ -134,6 +171,7 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
         <CardTitle>Schema Mapping</CardTitle>
         <CardDescription>
           Map your source API fields to SCIM schema attributes. Required attributes are marked with an asterisk (*).
+          {isLoadingFields && " Loading source fields..."}
         </CardDescription>
       </CardHeader>
       <CardContent>

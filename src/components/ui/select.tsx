@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
@@ -90,6 +91,11 @@ const SelectContent = React.forwardRef<
         )}
       >
         {children}
+        {React.Children.count(children) === 0 && (
+          <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+            No options available
+          </div>
+        )}
       </SelectPrimitive.Viewport>
       <SelectScrollDownButton />
     </SelectPrimitive.Content>
