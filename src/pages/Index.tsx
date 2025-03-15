@@ -43,6 +43,24 @@ const Index = () => {
   }, []);
   
   const handleApiConfigSave = (config: APIConfig) => {
+    // For DummyJSON API, ensure URL format is correct
+    if (config.baseUrl.includes('dummyjson.com')) {
+      // Make sure the URL ends with /users for proper API calls
+      if (!config.baseUrl.endsWith('/users')) {
+        // Remove trailing slash if present
+        const baseUrl = config.baseUrl.endsWith('/') 
+          ? config.baseUrl.slice(0, -1) 
+          : config.baseUrl;
+        
+        // Add /users to the end
+        config.baseUrl = `${baseUrl}/users`;
+        
+        toast.info('URL format updated', {
+          description: 'URL updated to include /users endpoint for DummyJSON API.',
+        });
+      }
+    }
+    
     setApiConfig(config);
     apiService.setConfig(config);
     updateConfigStatus();

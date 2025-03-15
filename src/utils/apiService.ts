@@ -256,6 +256,12 @@ export class APIService {
       if (contentType && contentType.includes('application/json')) {
         responseData = await response.json();
         console.log('JSON response received:', responseData);
+        
+        // Special handling for DummyJSON API response format
+        if (responseData.users && Array.isArray(responseData.users)) {
+          // When getting a list of users, return the users array
+          responseData = responseData.users;
+        }
       } else {
         const textData = await response.text();
         console.log('Non-JSON response received:', textData);
@@ -264,6 +270,12 @@ export class APIService {
           // Try to parse as JSON anyway in case the content-type header is wrong
           responseData = JSON.parse(textData);
           console.log('Successfully parsed response as JSON despite content-type');
+          
+          // Special handling for DummyJSON API response format
+          if (responseData.users && Array.isArray(responseData.users)) {
+            // When getting a list of users, return the users array
+            responseData = responseData.users;
+          }
         } catch (e) {
           // If it's not valid JSON, use the text as is
           responseData = { text: textData };
@@ -352,10 +364,23 @@ export class APIService {
     
     // Handle special case for dummyjson.com
     if (url.includes('dummyjson.com')) {
-      // For dummyjson.com, handle endpoints a bit differently
-      // If the baseUrl already includes '/users', we need to be careful not to duplicate it
+      // For dummyjson.com API, URLs are structured differently
+      // If the baseUrl already has '/users', we need to handle special cases
       
-      // If the baseUrl ends with '/users' and the endpoint is 'users/1', don't duplicate 'users'
+      // If endpoint is empty and we want to fetch all users
+      if (endpoint === '' || endpoint === '/') {
+        // If baseUrl already includes '/users', just return it
+        if (url.endsWith('/users')) {
+          return url;
+        }
+        // Otherwise make sure we add '/users' to get all users
+        else if (!url.endsWith('/')) {
+          return `${url}/users`;
+        }
+        return `${url}users`;
+      }
+      
+      // If endpoint starts with 'users/' but baseUrl already has '/users'
       if (url.endsWith('/users') && endpoint.startsWith('users/')) {
         // Extract the ID or other path part after 'users/'
         const restOfEndpoint = endpoint.substring('users/'.length);
@@ -364,7 +389,15 @@ export class APIService {
       
       // If endpoint is just a number, assume it's a user ID
       if (/^\d+$/.test(endpoint)) {
-        return `${url}/${endpoint}`;
+        // If baseUrl already includes '/users', just append the ID
+        if (url.endsWith('/users')) {
+          return `${url}/${endpoint}`;
+        }
+        // Otherwise make sure to include '/users/' before the ID
+        else if (!url.endsWith('/')) {
+          return `${url}/users/${endpoint}`;
+        }
+        return `${url}users/${endpoint}`;
       }
     }
     

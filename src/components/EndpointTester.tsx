@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ interface EndpointTesterProps {
 
 const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
   const [operation, setOperation] = useState('get');
-  const [endpoint, setEndpoint] = useState('/users');
+  const [endpoint, setEndpoint] = useState('');
   const [resourceType, setResourceType] = useState('Users');
   const [filter, setFilter] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -67,6 +68,11 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
     
     try {
       let finalEndpoint = endpoint;
+      
+      // For dummyjson, use empty string to get all users
+      if (finalEndpoint === '/users' && apiService.getConfig()?.baseUrl.includes('dummyjson.com/users')) {
+        finalEndpoint = '';
+      }
       
       finalEndpoint = finalEndpoint.trim();
       

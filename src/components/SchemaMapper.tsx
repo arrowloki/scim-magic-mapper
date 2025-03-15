@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +48,48 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
   const [sourceFields, setSourceFields] = useState<{id: string, name: string}[]>([]);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
   
+  // Extract all fields including nested ones from an object
+  const extractFields = (obj: any, prefix = '') => {
+    let fields: {id: string, name: string}[] = [];
+    
+    for (const key in obj) {
+      const value = obj[key];
+      const fieldPath = prefix ? `${prefix}.${key}` : key;
+      
+      // Skip functions and complex objects like Dates
+      if (typeof value === 'function' || value instanceof Date) {
+        continue;
+      }
+      
+      // Add the current field
+      fields.push({ id: fieldPath, name: fieldPath });
+      
+      // Recurse for nested objects, but not arrays or null
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        fields = [...fields, ...extractFields(value, fieldPath)];
+      }
+      
+      // Handle array of objects
+      if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
+        fields.push({ id: `${fieldPath}[0]`, name: `${fieldPath}[0]` });
+        
+        // Also include the first array element's fields
+        if (value[0] && typeof value[0] === 'object') {
+          for (const arrayKey in value[0]) {
+            if (typeof value[0][arrayKey] !== 'function') {
+              fields.push({ 
+                id: `${fieldPath}[0].${arrayKey}`, 
+                name: `${fieldPath}[0].${arrayKey}` 
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    return fields;
+  };
+  
   // Fetch fields from the API
   useEffect(() => {
     const fetchSourceFields = async () => {
@@ -58,11 +99,8 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
         const response = await apiService.fetchData('users/1', { method: 'GET' });
         
         if (response) {
-          // Extract the keys from the response and format them
-          const fields = Object.keys(response).map(key => ({
-            id: key,
-            name: key
-          }));
+          // Extract all fields including nested ones
+          const fields = extractFields(response);
           
           setSourceFields(fields);
           console.log('Loaded source fields:', fields);
@@ -121,6 +159,13 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
     if (userResponse.email) {
       const index = newMappings.findIndex(m => m.scimAttribute === 'emails[0].value');
       if (index >= 0) newMappings[index].sourceField = 'email';
+    } else if (userResponse.email === undefined && userResponse.gender) {
+      // For some APIs, we might need to create an email from other fields
+      const index = newMappings.findIndex(m => m.scimAttribute === 'emails[0].value');
+      if (index >= 0) {
+        newMappings[index].sourceField = 'username';
+        newMappings[index].transformation = 'value + "@example.com"';
+      }
     }
     
     if ('active' in userResponse) {
@@ -129,6 +174,53 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
         newMappings[index].sourceField = 'active';
         newMappings[index].transformation = 'Boolean(value)';
       }
+    } else if (userResponse.gender) {
+      // If no active field, we'll just set everyone as active
+      const index = newMappings.findIndex(m => m.scimAttribute === 'active');
+      if (index >= 0) {
+        newMappings[index].sourceField = 'id'; 
+        newMappings[index].transformation = 'true';
+      }
+    }
+    
+    // Add phone number mapping if available
+    const phoneIndex = newMappings.findIndex(m => m.scimAttribute === 'phoneNumbers[0].value');
+    if (phoneIndex === -1 && userResponse.phone) {
+      newMappings.push({
+        scimAttribute: 'phoneNumbers[0].value',
+        sourceField: 'phone',
+        isRequired: false
+      });
+    } else if (phoneIndex >= 0 && userResponse.phone) {
+      newMappings[phoneIndex].sourceField = 'phone';
+    }
+    
+    // Add external ID mapping if it exists
+    const externalIdIndex = newMappings.findIndex(m => m.scimAttribute === 'externalId');
+    if (externalIdIndex === -1 && userResponse.id) {
+      newMappings.push({
+        scimAttribute: 'externalId',
+        sourceField: 'id',
+        isRequired: false,
+        transformation: 'String(value)'
+      });
+    } else if (externalIdIndex >= 0 && userResponse.id) {
+      newMappings[externalIdIndex].sourceField = 'id';
+      newMappings[externalIdIndex].transformation = 'String(value)';
+    }
+    
+    // Add display name
+    const displayNameIndex = newMappings.findIndex(m => m.scimAttribute === 'displayName');
+    if (displayNameIndex === -1 && (userResponse.firstName || userResponse.lastName)) {
+      newMappings.push({
+        scimAttribute: 'displayName',
+        sourceField: 'firstName',
+        isRequired: false,
+        transformation: 'value + " " + (source.lastName || "")'
+      });
+    } else if (displayNameIndex >= 0 && (userResponse.firstName || userResponse.lastName)) {
+      newMappings[displayNameIndex].sourceField = 'firstName';
+      newMappings[displayNameIndex].transformation = 'value + " " + (source.lastName || "")';
     }
     
     setMappings(newMappings);
