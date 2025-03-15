@@ -43,6 +43,7 @@ export class APIService {
     
     // Store in localStorage for persistence
     localStorage.setItem('scim_mapper_api_config', JSON.stringify(config));
+    console.log('API config saved:', config);
   }
 
   getConfig(): APIConfig | null {
@@ -51,6 +52,7 @@ export class APIService {
       if (storedConfig) {
         try {
           this.config = JSON.parse(storedConfig);
+          console.log('Loaded stored API config:', this.config);
         } catch (error) {
           console.error('Failed to parse stored config:', error);
         }
@@ -72,6 +74,7 @@ export class APIService {
     if (storedHistory) {
       try {
         this.history = JSON.parse(storedHistory);
+        console.log(`Loaded ${this.history.length} history items from storage`);
       } catch (error) {
         console.error('Failed to parse stored history:', error);
         this.history = [];
@@ -80,6 +83,7 @@ export class APIService {
   }
 
   private addHistoryItem(item: APIHistory): void {
+    console.log('Adding history item:', item);
     // Add to the start of the array
     this.history.unshift(item);
     
@@ -93,6 +97,7 @@ export class APIService {
 
   async getAuthHeaders(): Promise<Record<string, string>> {
     if (!this.config) {
+      console.error('No API configuration set');
       throw new Error('API configuration not set');
     }
 
@@ -103,24 +108,43 @@ export class APIService {
     switch (this.config.authType) {
       case 'apiKey':
         if (!this.config.apiKey) {
+          console.error('API Key is required but missing');
           throw new Error('API Key is required');
         }
         headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+        console.log('Using API Key authentication');
         break;
         
       case 'basic':
         if (!this.config.username || !this.config.password) {
+          console.error('Username and password are required but missing');
           throw new Error('Username and password are required');
         }
         const credentials = btoa(`${this.config.username}:${this.config.password}`);
         headers['Authorization'] = `Basic ${credentials}`;
+        console.log('Using Basic authentication');
         break;
         
       case 'oauth':
-        headers['Authorization'] = `Bearer ${await this.getOAuthToken()}`;
+        try {
+          const token = await this.getOAuthToken();
+          headers['Authorization'] = `Bearer ${token}`;
+          console.log('Using OAuth authentication with acquired token');
+        } catch (error) {
+          console.error('OAuth token acquisition failed:', error);
+          toast.error('Authentication failed', {
+            description: 'Could not acquire OAuth token. Check your credentials.',
+          });
+          throw error;
+        }
+        break;
+        
+      case 'none':
+        console.log('No authentication used');
         break;
         
       default:
+        console.error(`Unsupported auth type: ${this.config.authType}`);
         throw new Error(`Unsupported auth type: ${this.config.authType}`);
     }
 
@@ -129,6 +153,7 @@ export class APIService {
 
   private async getOAuthToken(): Promise<string> {
     if (!this.config) {
+      console.error('API configuration not set');
       throw new Error('API configuration not set');
     }
     
@@ -137,6 +162,7 @@ export class APIService {
       this.tokenExpiry && 
       this.tokenExpiry > new Date()
     ) {
+      console.log('Using cached OAuth token');
       return this.accessToken;
     }
 
@@ -145,9 +171,11 @@ export class APIService {
       !this.config.clientId || 
       !this.config.clientSecret
     ) {
+      console.error('OAuth configuration incomplete');
       throw new Error('OAuth configuration incomplete');
     }
 
+    console.log('Requesting new OAuth token');
     try {
       const formData = new URLSearchParams();
       formData.append('grant_type', 'client_credentials');
@@ -163,17 +191,21 @@ export class APIService {
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`OAuth token request failed: ${response.status} ${response.statusText}`, errorText);
         throw new Error(`OAuth token request failed: ${response.status} ${response.statusText}`);
       }
       
       const tokenResponse = await response.json();
       
       if (!tokenResponse.access_token) {
+        console.error('Invalid OAuth response: missing access_token', tokenResponse);
         throw new Error('Invalid OAuth response: missing access_token');
       }
       
       this.accessToken = tokenResponse.access_token;
       this.tokenExpiry = new Date(Date.now() + (tokenResponse.expires_in || 3600) * 1000);
+      console.log('OAuth token acquired successfully');
       
       return this.accessToken;
     } catch (error) {
@@ -184,6 +216,7 @@ export class APIService {
 
   async fetchData(endpoint: string, options: RequestInit = {}): Promise<any> {
     if (!this.config) {
+      console.error('API configuration not set');
       throw new Error('API configuration not set');
     }
 
@@ -193,11 +226,18 @@ export class APIService {
     
     try {
       const url = this.buildUrl(endpoint);
-      const headers = await this.getAuthHeaders();
+      
+      // Only get auth headers if auth type is not 'none'
+      const headers = this.config.authType !== 'none' 
+        ? await this.getAuthHeaders()
+        : { 'Content-Type': 'application/json' };
       
       console.log(`Making API request to: ${url}`);
-      console.log('With headers:', headers);
-      console.log('With options:', options);
+      console.log('With headers:', JSON.stringify(headers));
+      console.log('With options:', JSON.stringify({
+        ...options,
+        body: options.body ? '(request body present)' : undefined
+      }));
       
       const response = await fetch(url, {
         ...options,
@@ -209,16 +249,35 @@ export class APIService {
 
       status = response.status;
       const duration = performance.now() - startTime;
+      console.log(`Response status: ${status}, duration: ${duration}ms`);
+      
+      let responseData;
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        responseData = await response.json();
+        console.log('JSON response received:', responseData);
+      } else {
+        const textData = await response.text();
+        console.log('Non-JSON response received:', textData);
+        
+        try {
+          // Try to parse as JSON anyway in case the content-type header is wrong
+          responseData = JSON.parse(textData);
+          console.log('Successfully parsed response as JSON despite content-type');
+        } catch (e) {
+          // If it's not valid JSON, use the text as is
+          responseData = { text: textData };
+          console.log('Using text response as is');
+        }
+      }
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API Error Response:', errorText);
-        
+        console.error('API Error Response:', responseData);
         throw new Error(`API error: ${response.status} ${response.statusText}`);
       }
       
       success = true;
-      const responseData = await response.json();
       
       // Add to history
       this.addHistoryItem({
@@ -233,6 +292,7 @@ export class APIService {
       return responseData;
     } catch (error) {
       const duration = performance.now() - startTime;
+      console.error('API request failed:', error);
       
       // Add failed request to history
       this.addHistoryItem({
@@ -244,7 +304,6 @@ export class APIService {
         success
       });
       
-      console.error('API request failed:', error);
       toast.error('API request failed', {
         description: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -255,13 +314,29 @@ export class APIService {
   async testConnection(): Promise<boolean> {
     try {
       if (!this.config) {
+        console.error('API configuration not set');
         throw new Error('API configuration not set');
       }
       
-      // Try to fetch a dummy endpoint or the root endpoint
-      const endpoint = '/';
-      await this.fetchData(endpoint);
+      console.log('Testing connection to API...');
       
+      // Try to fetch a dummy endpoint or the root endpoint
+      // Use a simple HEAD request first to minimize data transfer
+      const url = this.buildUrl('/');
+      
+      const headers = this.config.authType !== 'none' 
+        ? await this.getAuthHeaders()
+        : {};
+      
+      const response = await fetch(url, {
+        method: 'HEAD',
+        headers
+      });
+      
+      console.log(`Connection test result: ${response.status} ${response.statusText}`);
+      
+      // Even if the server returns an error code, if we get a response
+      // we consider the connection successful
       return true;
     } catch (error) {
       console.error('Connection test failed:', error);
@@ -276,23 +351,34 @@ export class APIService {
     
     let url = this.config.baseUrl;
     
-    // Handle trailing and leading slashes to properly join URL parts
-    if (url.endsWith('/') && endpoint.startsWith('/')) {
-      url = url + endpoint.substring(1);
-    } else if (!url.endsWith('/') && !endpoint.startsWith('/')) {
-      url = url + '/' + endpoint;
-    } else {
-      url = url + endpoint;
+    // Remove trailing slash from base URL if present
+    if (url.endsWith('/')) {
+      url = url.slice(0, -1);
     }
     
-    return url;
+    // Remove leading slash from endpoint if present
+    if (endpoint.startsWith('/')) {
+      endpoint = endpoint.slice(1);
+    }
+    
+    // Handle empty endpoint
+    if (endpoint === '') {
+      return url;
+    }
+    
+    // Combine with forward slash
+    return `${url}/${endpoint}`;
   }
 
   clearHistory(): void {
+    console.log('Clearing API request history');
     this.history = [];
     this.saveHistory();
   }
 }
+
+// Add 'none' as a valid auth type option
+export const authTypes = ['apiKey', 'basic', 'oauth', 'none'];
 
 // Export singleton instance
 export const apiService = new APIService();

@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle2, Clock, Play, RefreshCw, Search, User } from "lucide-react";
+import { CheckCircle2, Clock, AlertTriangle, Play, RefreshCw, Search, User } from "lucide-react";
 import { toast } from "sonner";
 import { apiService } from '@/utils/apiService';
 import { scimUtils } from '@/utils/scimUtils';
@@ -26,8 +25,12 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
   const [testResults, setTestResults] = useState<any>(null);
   const [responseTime, setResponseTime] = useState<number | null>(null);
   const [rawData, setRawData] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setError(null);
+  }, [operation, endpoint]);
   
-  // Sample SCIM user for testing
   const sampleUserData = {
     "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
     "userName": "john.doe@example.com",
@@ -58,19 +61,20 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
     setTestResults(null);
     setResponseTime(null);
     setRawData(null);
+    setError(null);
     
     const startTime = performance.now();
     
     try {
       let finalEndpoint = endpoint;
       
-      // Add filter if applicable
+      finalEndpoint = finalEndpoint.trim();
+      
       if (operation === 'get' && filter) {
         const separator = finalEndpoint.includes('?') ? '&' : '?';
         finalEndpoint += `${separator}filter=${encodeURIComponent(filter)}`;
       }
       
-      // Make API request
       let responseData;
       
       switch (operation) {
@@ -99,37 +103,41 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
           break;
       }
       
-      // Calculate response time
       const endTime = performance.now();
       setResponseTime(Math.round(endTime - startTime));
       
-      // Store raw response
       setRawData(responseData);
       
-      // Transform to SCIM if needed
       if (responseData) {
         try {
-          // For list responses, we might need to handle arrays
-          if (operation === 'get' && Array.isArray(responseData)) {
-            const scimUsers = responseData.map(user => 
-              scimUtils.transformToScim(user, 'User')
-            );
-            
-            setTestResults({
-              "totalResults": scimUsers.length,
-              "itemsPerPage": scimUsers.length,
-              "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-              "Resources": scimUsers
-            });
+          if (operation === 'get') {
+            if (Array.isArray(responseData)) {
+              const scimUsers = responseData.map(user => 
+                scimUtils.transformToScim(user, 'User')
+              );
+              
+              setTestResults({
+                "totalResults": scimUsers.length,
+                "itemsPerPage": scimUsers.length,
+                "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+                "Resources": scimUsers
+              });
+            } else if (responseData.Resources || responseData.resources) {
+              setTestResults(responseData);
+            } else if (typeof responseData === 'object') {
+              const scimData = scimUtils.transformToScim(responseData, 'User');
+              setTestResults(scimData);
+            } else {
+              setTestResults({ data: responseData });
+            }
           } else {
-            // For single item responses
             const scimData = scimUtils.transformToScim(responseData, 'User');
             setTestResults(scimData);
           }
         } catch (error) {
           console.error('Error transforming to SCIM:', error);
-          // If transformation fails, show raw data
           setTestResults(responseData);
+          setError(`SCIM transformation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
       
@@ -138,8 +146,10 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
       });
     } catch (error) {
       console.error('API test failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during API test';
+      setError(errorMessage);
       toast.error('Test failed', {
-        description: error instanceof Error ? error.message : 'Unknown error during API test',
+        description: errorMessage,
       });
     } finally {
       setIsLoading(false);
@@ -234,6 +244,18 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
             </div>
           </div>
         )}
+        
+        {error && (
+          <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-md p-4 text-sm">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-medium mb-1">Error</h4>
+                <p>{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
       <Separator />
       <CardFooter className="flex-col space-y-4 pt-6">
@@ -278,13 +300,13 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
                     {operation === 'get' && testResults.Resources && (
                       <div className="space-y-4">
                         <p className="text-sm text-muted-foreground mb-2">
-                          Found {testResults.totalResults} users
+                          Found {testResults.totalResults || testResults.Resources.length} users
                         </p>
                         {testResults.Resources.map((user: any, index: number) => (
                           <div key={index} className="border border-border rounded-md p-3 bg-background/50">
                             <div className="flex items-center gap-2 mb-2">
                               <User className="h-4 w-4 text-primary" />
-                              <span className="font-semibold">{user.displayName || 'User'}</span>
+                              <span className="font-semibold">{user.displayName || user.userName || 'User'}</span>
                             </div>
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                               <div>Username:</div>
@@ -309,7 +331,7 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
                       </div>
                     )}
                     
-                    {operation !== 'get' && (
+                    {(operation !== 'get' || !testResults.Resources) && (
                       <pre className="text-xs sm:text-sm">
                         {JSON.stringify(testResults, null, 2)}
                       </pre>
