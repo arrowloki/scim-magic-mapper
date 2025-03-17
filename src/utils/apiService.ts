@@ -1,4 +1,103 @@
 
+import { toast } from "sonner";
+
+// Define the history item interface
+export interface APIHistory {
+  timestamp: number;
+  method: string;
+  endpoint: string;
+  baseUrl?: string;
+  status: number;
+  duration: number;
+  success: boolean;
+  requestData?: any;
+  responseData?: any;
+  requestHeaders?: Record<string, string>;
+  responseHeaders?: Record<string, any>;
+}
+
+// API configuration interface
+interface APIConfig {
+  baseUrl: string;
+  authType: 'none' | 'basic' | 'bearer' | 'custom';
+  username?: string;
+  password?: string;
+  token?: string;
+  customHeaderName?: string;
+  customHeaderValue?: string;
+}
+
+class ApiService {
+  private config: APIConfig | null = null;
+  private history: APIHistory[] = [];
+  
+  // Set API configuration
+  setConfig(config: APIConfig): void {
+    this.config = config;
+    console.log('API configuration set:', JSON.stringify({
+      ...config,
+      password: config.password ? '****' : undefined,
+      token: config.token ? '****' : undefined
+    }));
+  }
+  
+  // Get current API configuration
+  getConfig(): APIConfig | null {
+    return this.config;
+  }
+  
+  // Build the full URL
+  private buildUrl(endpoint: string): string {
+    if (!this.config) {
+      throw new Error('API configuration not set');
+    }
+    
+    let baseUrl = this.config.baseUrl;
+    
+    // Handle trailing/leading slashes for proper URL formation
+    if (baseUrl.endsWith('/') && endpoint.startsWith('/')) {
+      return baseUrl + endpoint.substring(1);
+    } else if (!baseUrl.endsWith('/') && !endpoint.startsWith('/')) {
+      return baseUrl + '/' + endpoint;
+    }
+    
+    return baseUrl + endpoint;
+  }
+  
+  // Get authentication headers based on auth type
+  private async getAuthHeaders(): Promise<Record<string, string>> {
+    if (!this.config) {
+      throw new Error('API configuration not set');
+    }
+    
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    
+    switch (this.config.authType) {
+      case 'basic':
+        if (this.config.username && this.config.password) {
+          const credentials = btoa(`${this.config.username}:${this.config.password}`);
+          headers['Authorization'] = `Basic ${credentials}`;
+        }
+        break;
+        
+      case 'bearer':
+        if (this.config.token) {
+          headers['Authorization'] = `Bearer ${this.config.token}`;
+        }
+        break;
+        
+      case 'custom':
+        if (this.config.customHeaderName && this.config.customHeaderValue) {
+          headers[this.config.customHeaderName] = this.config.customHeaderValue;
+        }
+        break;
+    }
+    
+    return headers;
+  }
+  
   async fetchData(endpoint: string, options: RequestInit = {}): Promise<any> {
     if (!this.config) {
       console.error('API configuration not set');
@@ -123,3 +222,27 @@
       throw error;
     }
   }
+  
+  // Add an item to the history
+  private addHistoryItem(item: APIHistory): void {
+    this.history.unshift(item); // Add to the start of the array
+    
+    // Limit history to 50 items
+    if (this.history.length > 50) {
+      this.history = this.history.slice(0, 50);
+    }
+  }
+  
+  // Get the request history
+  getHistory(): APIHistory[] {
+    return this.history;
+  }
+  
+  // Clear the request history
+  clearHistory(): void {
+    this.history = [];
+  }
+}
+
+// Export a singleton instance of the service
+export const apiService = new ApiService();
