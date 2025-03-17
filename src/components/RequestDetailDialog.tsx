@@ -206,7 +206,7 @@ const RequestDetailDialog: React.FC<RequestDetailDialogProps> = ({ open, onOpenC
                     {Object.entries(historyItem.requestHeaders).map(([key, value]) => (
                       <React.Fragment key={key}>
                         <div className="font-semibold">{key}:</div>
-                        <div className="truncate">{value}</div>
+                        <div className="truncate">{String(value)}</div>
                       </React.Fragment>
                     ))}
                   </div>
@@ -226,7 +226,7 @@ const RequestDetailDialog: React.FC<RequestDetailDialogProps> = ({ open, onOpenC
                     {Object.entries(historyItem.responseHeaders).map(([key, value]) => (
                       <React.Fragment key={key}>
                         <div className="font-semibold">{key}:</div>
-                        <div className="truncate">{value}</div>
+                        <div className="truncate">{String(value)}</div>
                       </React.Fragment>
                     ))}
                   </div>
