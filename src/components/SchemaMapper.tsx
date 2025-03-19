@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -111,10 +110,10 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
         setIsLoadingFields(true);
         setFieldsFetchFailed(false);
         
-        // For DummyJSON, we need to use a specific endpoint
+        // For DummyJSON or JSONPlaceholder, we need to use a specific endpoint
         let endpoint = '';
-        if (config.baseUrl.includes('dummyjson.com')) {
-          endpoint = '1'; // Fetch first user for DummyJSON
+        if (config.baseUrl.includes('dummyjson.com') || config.baseUrl.includes('jsonplaceholder.typicode.com')) {
+          endpoint = '1'; // Fetch first user
         }
 
         // Fetch a sample user from the API
@@ -146,12 +145,12 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
         setSourceFields([
           { id: 'id', name: 'id' },
           { id: 'username', name: 'username' },
-          { id: 'firstName', name: 'firstName' },
-          { id: 'lastName', name: 'lastName' },
+          { id: 'name', name: 'name' },
           { id: 'email', name: 'email' },
           { id: 'phone', name: 'phone' },
           { id: 'address', name: 'address' },
-          { id: 'age', name: 'age' },
+          { id: 'website', name: 'website' },
+          { id: 'company', name: 'company' },
         ]);
       } finally {
         setIsLoadingFields(false);
@@ -176,10 +175,10 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
         setIsLoadingFields(true);
         setFieldsFetchFailed(false);
         
-        // For DummyJSON, we need to use a specific endpoint
+        // For DummyJSON or JSONPlaceholder, we need to use a specific endpoint
         let endpoint = '';
-        if (config.baseUrl.includes('dummyjson.com')) {
-          endpoint = '1'; // Fetch first user for DummyJSON
+        if (config.baseUrl.includes('dummyjson.com') || config.baseUrl.includes('jsonplaceholder.typicode.com')) {
+          endpoint = '1'; // Fetch first user
         }
 
         // Fetch a sample user from the API
@@ -219,26 +218,51 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
     const newMappings = [...mappings];
     
     // Try to match SCIM attributes with API fields
+    
+    // Username mapping
     if (userResponse.username) {
       const index = newMappings.findIndex(m => m.scimAttribute === 'userName');
       if (index >= 0) newMappings[index].sourceField = 'username';
     }
     
+    // Handle firstname/given name
     if (userResponse.firstName) {
       const index = newMappings.findIndex(m => m.scimAttribute === 'name.givenName');
       if (index >= 0) newMappings[index].sourceField = 'firstName';
+    } else if (userResponse.name && typeof userResponse.name === 'string') {
+      // For JSONPlaceholder where name is a single string
+      const index = newMappings.findIndex(m => m.scimAttribute === 'name.givenName');
+      if (index >= 0) {
+        newMappings[index].sourceField = 'name';
+        newMappings[index].transformation = 'value.split(" ")[0]';
+      }
+    } else if (userResponse.name && userResponse.name.firstname) {
+      const index = newMappings.findIndex(m => m.scimAttribute === 'name.givenName');
+      if (index >= 0) newMappings[index].sourceField = 'name.firstname';
     }
     
+    // Handle lastname/family name
     if (userResponse.lastName) {
       const index = newMappings.findIndex(m => m.scimAttribute === 'name.familyName');
       if (index >= 0) newMappings[index].sourceField = 'lastName';
+    } else if (userResponse.name && typeof userResponse.name === 'string') {
+      // For JSONPlaceholder where name is a single string
+      const index = newMappings.findIndex(m => m.scimAttribute === 'name.familyName');
+      if (index >= 0) {
+        newMappings[index].sourceField = 'name';
+        newMappings[index].transformation = 'value.split(" ").slice(1).join(" ")';
+      }
+    } else if (userResponse.name && userResponse.name.lastname) {
+      const index = newMappings.findIndex(m => m.scimAttribute === 'name.familyName');
+      if (index >= 0) newMappings[index].sourceField = 'name.lastname';
     }
     
+    // Handle email
     if (userResponse.email) {
       const index = newMappings.findIndex(m => m.scimAttribute === 'emails[0].value');
       if (index >= 0) newMappings[index].sourceField = 'email';
-    } else if (userResponse.email === undefined && userResponse.gender) {
-      // For some APIs, we might need to create an email from other fields
+    } else if (userResponse.email === undefined && userResponse.username) {
+      // Create email from username if missing
       const index = newMappings.findIndex(m => m.scimAttribute === 'emails[0].value');
       if (index >= 0) {
         newMappings[index].sourceField = 'username';
@@ -246,13 +270,14 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
       }
     }
     
+    // Handle active status
     if ('active' in userResponse) {
       const index = newMappings.findIndex(m => m.scimAttribute === 'active');
       if (index >= 0) {
         newMappings[index].sourceField = 'active';
         newMappings[index].transformation = 'Boolean(value)';
       }
-    } else if (userResponse.gender) {
+    } else {
       // If no active field, we'll just set everyone as active
       const index = newMappings.findIndex(m => m.scimAttribute === 'active');
       if (index >= 0) {
@@ -287,18 +312,44 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
       newMappings[externalIdIndex].transformation = 'String(value)';
     }
     
-    // Add display name
+    // Add display name - handle different name formats
     const displayNameIndex = newMappings.findIndex(m => m.scimAttribute === 'displayName');
-    if (displayNameIndex === -1 && (userResponse.firstName || userResponse.lastName)) {
-      newMappings.push({
-        scimAttribute: 'displayName',
-        sourceField: 'firstName',
-        isRequired: false,
-        transformation: 'value + " " + (source.lastName || "")'
-      });
-    } else if (displayNameIndex >= 0 && (userResponse.firstName || userResponse.lastName)) {
-      newMappings[displayNameIndex].sourceField = 'firstName';
-      newMappings[displayNameIndex].transformation = 'value + " " + (source.lastName || "")';
+    
+    if (displayNameIndex === -1) {
+      if (userResponse.firstName || userResponse.lastName) {
+        // For APIs with firstName/lastName fields
+        newMappings.push({
+          scimAttribute: 'displayName',
+          sourceField: 'firstName',
+          isRequired: false,
+          transformation: 'value + " " + (source.lastName || "")'
+        });
+      } else if (userResponse.name && typeof userResponse.name === 'string') {
+        // For APIs with just name as a string (like JSONPlaceholder)
+        newMappings.push({
+          scimAttribute: 'displayName',
+          sourceField: 'name',
+          isRequired: false
+        });
+      } else if (userResponse.username) {
+        // Fallback to username
+        newMappings.push({
+          scimAttribute: 'displayName',
+          sourceField: 'username',
+          isRequired: false
+        });
+      }
+    } else {
+      if (userResponse.firstName || userResponse.lastName) {
+        newMappings[displayNameIndex].sourceField = 'firstName';
+        newMappings[displayNameIndex].transformation = 'value + " " + (source.lastName || "")';
+      } else if (userResponse.name && typeof userResponse.name === 'string') {
+        newMappings[displayNameIndex].sourceField = 'name';
+        newMappings[displayNameIndex].transformation = undefined;
+      } else if (userResponse.username) {
+        newMappings[displayNameIndex].sourceField = 'username';
+        newMappings[displayNameIndex].transformation = undefined;
+      }
     }
     
     setMappings(newMappings);
@@ -546,3 +597,4 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
 };
 
 export default SchemaMapper;
+

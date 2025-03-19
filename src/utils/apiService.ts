@@ -64,6 +64,11 @@ class ApiService {
       if (this.config.baseUrl.includes('dummyjson.com')) {
         // Try to get the first user
         await this.fetchData('1', { method: 'GET' });
+      } 
+      // For JSONPlaceholder, use a specific test endpoint
+      else if (this.config.baseUrl.includes('jsonplaceholder.typicode.com')) {
+        // Try to get the first user
+        await this.fetchData('1', { method: 'GET' });
       } else {
         // Attempt a simple GET request to verify connection for other APIs
         await this.fetchData('', { method: 'GET' });
@@ -85,6 +90,26 @@ class ApiService {
     
     // Special handling for DummyJSON API
     if (baseUrl.includes('dummyjson.com')) {
+      // Check if the URL already includes /users
+      if (!baseUrl.includes('/users')) {
+        // Remove trailing slash if present
+        baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+        baseUrl = `${baseUrl}/users`;
+      }
+      
+      // For empty endpoints, return base URL
+      if (!endpoint) {
+        return baseUrl;
+      }
+      
+      // For numeric IDs, format correctly
+      if (/^\d+$/.test(endpoint)) {
+        return `${baseUrl}/${endpoint}`;
+      }
+    }
+    
+    // Special handling for JSONPlaceholder API
+    if (baseUrl.includes('jsonplaceholder.typicode.com')) {
       // Check if the URL already includes /users
       if (!baseUrl.includes('/users')) {
         // Remove trailing slash if present
@@ -217,6 +242,8 @@ class ApiService {
             responseData = responseData.users;
           }
         }
+        
+        // No special handling needed for JSONPlaceholder as it returns arrays directly
       } else {
         const textData = await response.text();
         console.log('Non-JSON response received:', textData);
