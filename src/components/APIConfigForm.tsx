@@ -38,7 +38,7 @@ const APIConfigForm: React.FC<APIConfigFormProps> = ({ onConfigSave }) => {
     setConfig(prev => ({ ...prev, [name]: value }));
   };
   
-  const handleAuthTypeChange = (value: string) => {
+  const handleAuthTypeChange = (value: 'none' | 'basic' | 'bearer' | 'custom' | 'apiKey' | 'oauth') => {
     setConfig(prev => ({ ...prev, authType: value }));
   };
   
