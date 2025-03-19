@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 
 // Define the history item interface
@@ -59,8 +60,14 @@ class ApiService {
     }
     
     try {
-      // Attempt a simple GET request to verify connection
-      await this.fetchData('', { method: 'GET' });
+      // For DummyJSON, use a specific test endpoint
+      if (this.config.baseUrl.includes('dummyjson.com')) {
+        // Try to get the first user
+        await this.fetchData('1', { method: 'GET' });
+      } else {
+        // Attempt a simple GET request to verify connection for other APIs
+        await this.fetchData('', { method: 'GET' });
+      }
       return true;
     } catch (error) {
       console.error('Test connection failed:', error);
@@ -76,10 +83,30 @@ class ApiService {
     
     let baseUrl = this.config.baseUrl;
     
+    // Special handling for DummyJSON API
+    if (baseUrl.includes('dummyjson.com')) {
+      // Check if the URL already includes /users
+      if (!baseUrl.includes('/users')) {
+        // Remove trailing slash if present
+        baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+        baseUrl = `${baseUrl}/users`;
+      }
+      
+      // For empty endpoints, return base URL
+      if (!endpoint) {
+        return baseUrl;
+      }
+      
+      // For numeric IDs, format correctly
+      if (/^\d+$/.test(endpoint)) {
+        return `${baseUrl}/${endpoint}`;
+      }
+    }
+    
     // Handle trailing/leading slashes for proper URL formation
     if (baseUrl.endsWith('/') && endpoint.startsWith('/')) {
       return baseUrl + endpoint.substring(1);
-    } else if (!baseUrl.endsWith('/') && !endpoint.startsWith('/')) {
+    } else if (!baseUrl.endsWith('/') && !endpoint.startsWith('/') && endpoint) {
       return baseUrl + '/' + endpoint;
     }
     
@@ -184,9 +211,11 @@ class ApiService {
         console.log('JSON response received:', responseData);
         
         // Special handling for DummyJSON API response format
-        if (responseData.users && Array.isArray(responseData.users)) {
-          // When getting a list of users, return the users array
-          responseData = responseData.users;
+        if (this.config.baseUrl.includes('dummyjson.com')) {
+          if (responseData.users && Array.isArray(responseData.users)) {
+            // When getting a list of users, return the users array
+            responseData = responseData.users;
+          }
         }
       } else {
         const textData = await response.text();
@@ -198,9 +227,11 @@ class ApiService {
           console.log('Successfully parsed response as JSON despite content-type');
           
           // Special handling for DummyJSON API response format
-          if (responseData.users && Array.isArray(responseData.users)) {
-            // When getting a list of users, return the users array
-            responseData = responseData.users;
+          if (this.config.baseUrl.includes('dummyjson.com')) {
+            if (responseData.users && Array.isArray(responseData.users)) {
+              // When getting a list of users, return the users array
+              responseData = responseData.users;
+            }
           }
         } catch (e) {
           // If it's not valid JSON, use the text as is

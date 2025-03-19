@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowRight, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { ArrowRight, Info, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiService } from "@/utils/apiService";
 
@@ -47,10 +48,16 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [sourceFields, setSourceFields] = useState<{id: string, name: string}[]>([]);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
+  const [fieldsFetchFailed, setFieldsFetchFailed] = useState(false);
   
   // Extract all fields including nested ones from an object
   const extractFields = (obj: any, prefix = '') => {
     let fields: {id: string, name: string}[] = [];
+    
+    if (!obj || typeof obj !== 'object') {
+      console.warn('Invalid object for field extraction', obj);
+      return fields;
+    }
     
     for (const key in obj) {
       const value = obj[key];
@@ -93,10 +100,25 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
   // Fetch fields from the API
   useEffect(() => {
     const fetchSourceFields = async () => {
+      const config = apiService.getConfig();
+      if (!config || !config.baseUrl) {
+        console.error('API configuration not set, cannot fetch fields');
+        setFieldsFetchFailed(true);
+        return;
+      }
+
       try {
         setIsLoadingFields(true);
-        // Fetch a sample user from the dummy API
-        const response = await apiService.fetchData('users/1', { method: 'GET' });
+        setFieldsFetchFailed(false);
+        
+        // For DummyJSON, we need to use a specific endpoint
+        let endpoint = '';
+        if (config.baseUrl.includes('dummyjson.com')) {
+          endpoint = '1'; // Fetch first user for DummyJSON
+        }
+
+        // Fetch a sample user from the API
+        const response = await apiService.fetchData(endpoint, { method: 'GET' });
         
         if (response) {
           // Extract all fields including nested ones
@@ -110,9 +132,12 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
           
           // Set default mappings based on the response
           updateDefaultMappings(response);
+        } else {
+          throw new Error('No data returned from API');
         }
       } catch (error) {
         console.error('Failed to load source fields:', error);
+        setFieldsFetchFailed(true);
         toast.error('Failed to load fields', {
           description: 'Could not fetch fields from the API. Please check your API configuration.',
         });
@@ -135,6 +160,59 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
 
     fetchSourceFields();
   }, []);
+  
+  // Manual refresh of fields
+  const handleRefreshFields = async () => {
+    const fetchSourceFields = async () => {
+      const config = apiService.getConfig();
+      if (!config || !config.baseUrl) {
+        toast.error('API configuration required', {
+          description: 'Please configure the API first in the API Configuration tab.',
+        });
+        return;
+      }
+
+      try {
+        setIsLoadingFields(true);
+        setFieldsFetchFailed(false);
+        
+        // For DummyJSON, we need to use a specific endpoint
+        let endpoint = '';
+        if (config.baseUrl.includes('dummyjson.com')) {
+          endpoint = '1'; // Fetch first user for DummyJSON
+        }
+
+        // Fetch a sample user from the API
+        const response = await apiService.fetchData(endpoint, { method: 'GET' });
+        
+        if (response) {
+          // Extract all fields including nested ones
+          const fields = extractFields(response);
+          
+          setSourceFields(fields);
+          console.log('Refreshed source fields:', fields);
+          toast.success('Source fields refreshed', {
+            description: `${fields.length} fields discovered from the API.`,
+          });
+          
+          // Set default mappings based on the response
+          updateDefaultMappings(response);
+        } else {
+          throw new Error('No data returned from API');
+        }
+      } catch (error) {
+        console.error('Failed to refresh source fields:', error);
+        setFieldsFetchFailed(true);
+        toast.error('Failed to refresh fields', {
+          description: 'Could not fetch fields from the API. Please check your API configuration.',
+        });
+      } finally {
+        setIsLoadingFields(false);
+      }
+    };
+
+    fetchSourceFields();
+  };
   
   // Update default mappings based on the API response
   const updateDefaultMappings = (userResponse: any) => {
@@ -306,6 +384,32 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {fieldsFetchFailed && (
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-4 flex items-start gap-3">
+            <Info className="h-5 w-5 text-amber-500 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-medium text-amber-800">Could not load API fields</h4>
+              <p className="text-sm text-amber-700 mt-1">
+                We couldn't automatically detect fields from your API. You can still map fields manually, or try to refresh the fields.
+              </p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleRefreshFields} 
+                disabled={isLoadingFields}
+                className="mt-2"
+              >
+                {isLoadingFields ? (
+                  <RefreshCw className="h-3.5 w-3.5 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                )}
+                Refresh Fields
+              </Button>
+            </div>
+          </div>
+        )}
+        
         <ScrollArea className="max-h-[500px] pr-4">
           <Table className="table-fixed">
             <TableHeader className="bg-secondary/50 sticky top-0 z-10">
@@ -402,14 +506,28 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
       </CardContent>
       <Separator />
       <CardFooter className="flex justify-between pt-6">
-        <Button
-          variant="outline"
-          onClick={handleAddMapping}
-          className="transition-all-200"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Mapping
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline" 
+            onClick={handleRefreshFields} 
+            disabled={isLoadingFields}
+          >
+            {isLoadingFields ? (
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Refresh Fields
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleAddMapping}
+            className="transition-all-200"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Mapping
+          </Button>
+        </div>
         <Button
           onClick={handleSaveMapping}
           disabled={isLoading}
