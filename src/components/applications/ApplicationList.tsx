@@ -35,7 +35,10 @@ const ApplicationList: React.FC = () => {
   } = useApplications();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [newAppName, setNewAppName] = useState('');
+  const [editAppId, setEditAppId] = useState<string | null>(null);
+  const [editAppName, setEditAppName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [appToDelete, setAppToDelete] = useState<string | null>(null);
 
@@ -44,6 +47,28 @@ const ApplicationList: React.FC = () => {
       addApplication(newAppName.trim());
       setNewAppName('');
       setIsDialogOpen(false);
+    }
+  };
+
+  const handleEditApplication = () => {
+    if (editAppId && editAppName.trim()) {
+      const app = applications.find(a => a.id === editAppId);
+      if (app) {
+        // Use the updateApplication function from context to update the app name
+        useApplications().updateApplication(editAppId, { name: editAppName.trim() });
+        setEditAppId(null);
+        setEditAppName('');
+        setIsEditDialogOpen(false);
+      }
+    }
+  };
+
+  const handleOpenEditDialog = (id: string) => {
+    const app = applications.find(a => a.id === id);
+    if (app) {
+      setEditAppId(id);
+      setEditAppName(app.name);
+      setIsEditDialogOpen(true);
     }
   };
 
@@ -112,6 +137,36 @@ const ApplicationList: React.FC = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Add Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Application</DialogTitle>
+              <DialogDescription>
+                Update the name of your application.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Input 
+                placeholder="Application name" 
+                value={editAppName}
+                onChange={(e) => setEditAppName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleEditApplication();
+                }}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleEditApplication} disabled={!editAppName.trim()}>
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {applications.length === 0 ? (
@@ -133,7 +188,7 @@ const ApplicationList: React.FC = () => {
               application={app}
               isActive={app.id === activeApplicationId}
               onSelect={handleSelectApplication}
-              onEdit={handleSelectApplication}
+              onEdit={handleOpenEditDialog}
               onDelete={(id) => setAppToDelete(id)}
             />
           ))}
