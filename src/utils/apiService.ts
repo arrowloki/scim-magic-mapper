@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 
 // Define the history item interface
@@ -17,7 +16,7 @@ export interface APIHistory {
 }
 
 // API configuration interface
-interface APIConfig {
+export interface APIConfig {
   baseUrl: string;
   authType: 'none' | 'basic' | 'bearer' | 'custom';
   username?: string;
@@ -25,6 +24,11 @@ interface APIConfig {
   token?: string;
   customHeaderName?: string;
   customHeaderValue?: string;
+  name?: string;
+  apiKey?: string;
+  tokenUrl?: string;
+  clientId?: string;
+  clientSecret?: string;
 }
 
 class ApiService {
@@ -37,13 +41,31 @@ class ApiService {
     console.log('API configuration set:', JSON.stringify({
       ...config,
       password: config.password ? '****' : undefined,
-      token: config.token ? '****' : undefined
+      token: config.token ? '****' : undefined,
+      apiKey: config.apiKey ? '****' : undefined,
+      clientSecret: config.clientSecret ? '****' : undefined
     }));
   }
   
   // Get current API configuration
   getConfig(): APIConfig | null {
     return this.config;
+  }
+  
+  // Test connection to the API
+  async testConnection(): Promise<boolean> {
+    if (!this.config) {
+      throw new Error('API configuration not set');
+    }
+    
+    try {
+      // Attempt a simple GET request to verify connection
+      await this.fetchData('', { method: 'GET' });
+      return true;
+    } catch (error) {
+      console.error('Test connection failed:', error);
+      return false;
+    }
   }
   
   // Build the full URL
@@ -93,6 +115,13 @@ class ApiService {
           headers[this.config.customHeaderName] = this.config.customHeaderValue;
         }
         break;
+        
+      case 'apiKey':
+        if (this.config.apiKey) {
+          // Commonly used as a query parameter or header
+          headers['X-API-Key'] = this.config.apiKey;
+        }
+        break;
     }
     
     return headers;
@@ -113,7 +142,7 @@ class ApiService {
     try {
       const url = this.buildUrl(endpoint);
       
-      // Only get auth headers if auth type is not 'none'
+      // Only get auth headers if auth type is not 'none' 
       const requestHeaders = this.config.authType !== 'none' 
         ? await this.getAuthHeaders()
         : { 'Content-Type': 'application/json' };
