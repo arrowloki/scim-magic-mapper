@@ -23,7 +23,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 const ApplicationList: React.FC = () => {
@@ -53,6 +52,11 @@ const ApplicationList: React.FC = () => {
       deleteApplication(appToDelete);
       setAppToDelete(null);
     }
+  };
+
+  const handleSelectApplication = (id: string) => {
+    console.log("Selecting application:", id);
+    setActiveApplication(id);
   };
 
   const filteredApplications = searchTerm 
@@ -128,8 +132,8 @@ const ApplicationList: React.FC = () => {
               key={app.id}
               application={app}
               isActive={app.id === activeApplicationId}
-              onSelect={(id) => setActiveApplication(id)}
-              onEdit={(id) => setActiveApplication(id)}
+              onSelect={handleSelectApplication}
+              onEdit={handleSelectApplication}
               onDelete={(id) => setAppToDelete(id)}
             />
           ))}
