@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,9 +14,10 @@ import { scimUtils } from '@/utils/scimUtils';
 
 interface EndpointTesterProps {
   isConfigured: boolean;
+  applicationId: string;
 }
 
-const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
+const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured, applicationId }) => {
   const [operation, setOperation] = useState('get');
   const [endpoint, setEndpoint] = useState('');
   const [resourceType, setResourceType] = useState('Users');
@@ -71,7 +71,7 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
       let finalEndpoint = endpoint;
       
       // For dummyjson, use empty string to get all users
-      if (finalEndpoint === '/users' && apiService.getConfig()?.baseUrl.includes('dummyjson.com/users')) {
+      if (finalEndpoint === '/users' && apiService.getConfig(applicationId)?.baseUrl.includes('dummyjson.com/users')) {
         finalEndpoint = '';
       }
       
@@ -86,27 +86,27 @@ const EndpointTester: React.FC<EndpointTesterProps> = ({ isConfigured }) => {
       
       switch (operation) {
         case 'get':
-          responseData = await apiService.fetchData(finalEndpoint);
+          responseData = await apiService.fetchData(finalEndpoint, undefined, applicationId);
           break;
           
         case 'create':
           responseData = await apiService.fetchData(finalEndpoint, {
             method: 'POST',
             body: JSON.stringify(sampleUserData)
-          });
+          }, applicationId);
           break;
           
         case 'update':
           responseData = await apiService.fetchData(`${finalEndpoint}/12345`, {
             method: 'PUT',
             body: JSON.stringify(sampleUserData)
-          });
+          }, applicationId);
           break;
           
         case 'delete':
           responseData = await apiService.fetchData(`${finalEndpoint}/12345`, {
             method: 'DELETE'
-          });
+          }, applicationId);
           break;
       }
       
