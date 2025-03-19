@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,9 +13,10 @@ interface MappingItem {
 
 interface MappingPreviewProps {
   mappings: MappingItem[];
+  applicationId?: string;
 }
 
-const MappingPreview: React.FC<MappingPreviewProps> = ({ mappings }) => {
+const MappingPreview: React.FC<MappingPreviewProps> = ({ mappings, applicationId }) => {
   // Generate sample source data based on mappings
   const generateSampleSourceData = () => {
     const data: Record<string, any> = {};

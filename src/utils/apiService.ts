@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 
 // Define the history item interface
@@ -164,36 +163,36 @@ class ApiService {
       'Content-Type': 'application/json'
     };
     
-    switch (this.config.authType) {
+    switch (config.authType) {
       case 'basic':
-        if (this.config.username && this.config.password) {
-          const credentials = btoa(`${this.config.username}:${this.config.password}`);
+        if (config.username && config.password) {
+          const credentials = btoa(`${config.username}:${config.password}`);
           headers['Authorization'] = `Basic ${credentials}`;
         }
         break;
         
       case 'bearer':
-        if (this.config.token) {
-          headers['Authorization'] = `Bearer ${this.config.token}`;
+        if (config.token) {
+          headers['Authorization'] = `Bearer ${config.token}`;
         }
         break;
         
       case 'custom':
-        if (this.config.customHeaderName && this.config.customHeaderValue) {
-          headers[this.config.customHeaderName] = this.config.customHeaderValue;
+        if (config.customHeaderName && config.customHeaderValue) {
+          headers[config.customHeaderName] = config.customHeaderValue;
         }
         break;
         
       case 'apiKey':
-        if (this.config.apiKey) {
+        if (config.apiKey) {
           // Commonly used as a query parameter or header
-          headers['X-API-Key'] = this.config.apiKey;
+          headers['X-API-Key'] = config.apiKey;
         }
         break;
         
       case 'oauth':
-        if (this.config.token) {
-          headers['Authorization'] = `Bearer ${this.config.token}`;
+        if (config.token) {
+          headers['Authorization'] = `Bearer ${config.token}`;
         }
         break;
     }
