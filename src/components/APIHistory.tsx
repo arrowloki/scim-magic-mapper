@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { History, MoveUpRight, MoveDownRight, Clock, AlertCircle, CheckCircle } from "lucide-react";
 import RequestDetailDialog from './RequestDetailDialog';
 import { useQuery } from '@tanstack/react-query';
+import { apiService, APIHistory as APIHistoryType } from '@/utils/apiService';
 
 // Define the interfaces that were missing
 interface RequestDetailsItem {
@@ -33,6 +34,31 @@ interface APIHistoryProps {
 
 const APIHistory: React.FC<APIHistoryProps> = ({ applicationId }) => {
   const [selectedItem, setSelectedItem] = useState<DataItem | null>(null);
+  const [apiHistoryData, setApiHistoryData] = useState<APIHistoryType[]>([]);
+  
+  // Fetch history data from the apiService
+  useEffect(() => {
+    const historyData = apiService.getHistory(applicationId);
+    setApiHistoryData(historyData);
+  }, [applicationId]);
+
+  // Create a mapping function to convert between the DataItem and APIHistoryType
+  const mapToAPIHistory = (item: DataItem): APIHistoryType => {
+    return {
+      timestamp: item.details.timestamp,
+      method: item.details.method,
+      endpoint: '', // Required property for APIHistory
+      baseUrl: item.details.url,
+      status: item.details.status || 0,
+      duration: 0, // Required property for APIHistory
+      success: item.details.status ? item.details.status >= 200 && item.details.status < 300 : false, // Required property for APIHistory
+      requestData: item.details.body,
+      responseData: item.details.responseData,
+      requestHeaders: item.details.headers,
+      responseHeaders: item.details.responseHeaders || {},
+      applicationId: applicationId
+    };
+  };
   
   // In a real implementation, we would fetch history from a service or context
   // For now, just display a placeholder
@@ -78,7 +104,7 @@ const APIHistory: React.FC<APIHistoryProps> = ({ applicationId }) => {
         <RequestDetailDialog 
           open={!!selectedItem}
           onOpenChange={() => setSelectedItem(null)}
-          historyItem={selectedItem.details}
+          historyItem={mapToAPIHistory(selectedItem)}
         />
       )}
     </Card>
