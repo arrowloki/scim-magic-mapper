@@ -76,9 +76,9 @@ const APIHistory: React.FC<APIHistoryProps> = ({ applicationId }) => {
       
       {selectedItem && (
         <RequestDetailDialog 
-          isOpen={!!selectedItem}
-          onClose={() => setSelectedItem(null)}
-          requestDetails={selectedItem.details}
+          open={!!selectedItem}
+          onOpenChange={() => setSelectedItem(null)}
+          historyItem={selectedItem.details}
         />
       )}
     </Card>
