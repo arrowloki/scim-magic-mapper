@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,9 +34,15 @@ interface MappingItem {
 
 interface SchemaMapperProps {
   onMappingSave: (mappings: MappingItem[]) => void;
+  initialMappings?: MappingItem[];
+  applicationId?: string;
 }
 
-const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
+const SchemaMapper: React.FC<SchemaMapperProps> = ({ 
+  onMappingSave, 
+  initialMappings,
+  applicationId 
+}) => {
   const [mappings, setMappings] = useState<MappingItem[]>([
     { scimAttribute: 'userName', sourceField: '', isRequired: true },
     { scimAttribute: 'name.givenName', sourceField: '', isRequired: true },
@@ -48,6 +55,13 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
   const [sourceFields, setSourceFields] = useState<{id: string, name: string}[]>([]);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
   const [fieldsFetchFailed, setFieldsFetchFailed] = useState(false);
+  
+  // Load initial mappings if provided
+  useEffect(() => {
+    if (initialMappings && initialMappings.length > 0) {
+      setMappings(initialMappings);
+    }
+  }, [initialMappings]);
   
   // Extract all fields including nested ones from an object
   const extractFields = (obj: any, prefix = '') => {
@@ -99,7 +113,7 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
   // Fetch fields from the API
   useEffect(() => {
     const fetchSourceFields = async () => {
-      const config = apiService.getConfig();
+      const config = apiService.getConfig(applicationId);
       if (!config || !config.baseUrl) {
         console.error('API configuration not set, cannot fetch fields');
         setFieldsFetchFailed(true);
@@ -117,7 +131,7 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
         }
 
         // Fetch a sample user from the API
-        const response = await apiService.fetchData(endpoint, { method: 'GET' });
+        const response = await apiService.fetchData(endpoint, { method: 'GET' }, applicationId);
         
         if (response) {
           // Extract all fields including nested ones
@@ -129,8 +143,10 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
             description: `${fields.length} fields discovered from the API.`,
           });
           
-          // Set default mappings based on the response
-          updateDefaultMappings(response);
+          // Set default mappings based on the response if no initial mappings
+          if (!initialMappings || initialMappings.length === 0) {
+            updateDefaultMappings(response);
+          }
         } else {
           throw new Error('No data returned from API');
         }
@@ -157,13 +173,15 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
       }
     };
 
-    fetchSourceFields();
-  }, []);
+    if (applicationId) {
+      fetchSourceFields();
+    }
+  }, [applicationId, initialMappings]);
   
   // Manual refresh of fields
   const handleRefreshFields = async () => {
     const fetchSourceFields = async () => {
-      const config = apiService.getConfig();
+      const config = apiService.getConfig(applicationId);
       if (!config || !config.baseUrl) {
         toast.error('API configuration required', {
           description: 'Please configure the API first in the API Configuration tab.',
@@ -182,7 +200,7 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
         }
 
         // Fetch a sample user from the API
-        const response = await apiService.fetchData(endpoint, { method: 'GET' });
+        const response = await apiService.fetchData(endpoint, { method: 'GET' }, applicationId);
         
         if (response) {
           // Extract all fields including nested ones
@@ -194,7 +212,7 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
             description: `${fields.length} fields discovered from the API.`,
           });
           
-          // Set default mappings based on the response
+          // Update default mappings based on the response
           updateDefaultMappings(response);
         } else {
           throw new Error('No data returned from API');
@@ -597,4 +615,3 @@ const SchemaMapper: React.FC<SchemaMapperProps> = ({ onMappingSave }) => {
 };
 
 export default SchemaMapper;
-

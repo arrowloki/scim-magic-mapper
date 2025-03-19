@@ -13,9 +13,15 @@ import { apiService, APIConfig } from '@/utils/apiService';
 
 interface APIConfigFormProps {
   onConfigSave: (config: APIConfig) => void;
+  initialConfig?: APIConfig;
+  applicationId?: string;
 }
 
-const APIConfigForm: React.FC<APIConfigFormProps> = ({ onConfigSave }) => {
+const APIConfigForm: React.FC<APIConfigFormProps> = ({ 
+  onConfigSave, 
+  initialConfig,
+  applicationId 
+}) => {
   const [config, setConfig] = useState<APIConfig>({
     name: '',
     baseUrl: '',
@@ -26,12 +32,17 @@ const APIConfigForm: React.FC<APIConfigFormProps> = ({ onConfigSave }) => {
   const [isLoading, setIsLoading] = useState(false);
   
   useEffect(() => {
-    // Load existing configuration if available
-    const existingConfig = apiService.getConfig();
-    if (existingConfig) {
-      setConfig(existingConfig);
+    // Load initial configuration if provided
+    if (initialConfig) {
+      setConfig(initialConfig);
+    } else {
+      // Load existing configuration from API service if available
+      const existingConfig = apiService.getConfig(applicationId);
+      if (existingConfig) {
+        setConfig(existingConfig);
+      }
     }
-  }, []);
+  }, [initialConfig, applicationId]);
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -73,10 +84,10 @@ const APIConfigForm: React.FC<APIConfigFormProps> = ({ onConfigSave }) => {
     
     try {
       // Temporarily set the config for testing
-      apiService.setConfig(config);
+      apiService.setConfig(config, applicationId);
       
       // Test the connection
-      const success = await apiService.testConnection();
+      const success = await apiService.testConnection(applicationId);
       
       if (success) {
         toast.success('Connection successful!', {
@@ -126,9 +137,6 @@ const APIConfigForm: React.FC<APIConfigFormProps> = ({ onConfigSave }) => {
     
     // Save configuration
     onConfigSave(config);
-    toast.success('Configuration saved', {
-      description: 'Your API configuration has been saved.',
-    });
   };
   
   return (

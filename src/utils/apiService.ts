@@ -14,6 +14,7 @@ export interface APIHistory {
   responseData?: any;
   requestHeaders?: Record<string, string>;
   responseHeaders?: Record<string, any>;
+  applicationId?: string;
 }
 
 // API configuration interface
@@ -33,12 +34,18 @@ export interface APIConfig {
 }
 
 class ApiService {
-  private config: APIConfig | null = null;
+  private currentConfig: APIConfig | null = null;
+  private configStore: Map<string, APIConfig> = new Map();
   private history: APIHistory[] = [];
   
-  // Set API configuration
-  setConfig(config: APIConfig): void {
-    this.config = config;
+  // Set API configuration for a specific application
+  setConfig(config: APIConfig, applicationId?: string): void {
+    this.currentConfig = config;
+    
+    if (applicationId) {
+      this.configStore.set(applicationId, config);
+    }
+    
     console.log('API configuration set:', JSON.stringify({
       ...config,
       password: config.password ? '****' : undefined,
@@ -49,29 +56,34 @@ class ApiService {
   }
   
   // Get current API configuration
-  getConfig(): APIConfig | null {
-    return this.config;
+  getConfig(applicationId?: string): APIConfig | null {
+    if (applicationId && this.configStore.has(applicationId)) {
+      return this.configStore.get(applicationId) || null;
+    }
+    return this.currentConfig;
   }
   
   // Test connection to the API
-  async testConnection(): Promise<boolean> {
-    if (!this.config) {
+  async testConnection(applicationId?: string): Promise<boolean> {
+    const config = applicationId ? this.configStore.get(applicationId) : this.currentConfig;
+    
+    if (!config) {
       throw new Error('API configuration not set');
     }
     
     try {
       // For DummyJSON, use a specific test endpoint
-      if (this.config.baseUrl.includes('dummyjson.com')) {
+      if (config.baseUrl.includes('dummyjson.com')) {
         // Try to get the first user
-        await this.fetchData('1', { method: 'GET' });
+        await this.fetchData('1', { method: 'GET' }, applicationId);
       } 
       // For JSONPlaceholder, use a specific test endpoint
-      else if (this.config.baseUrl.includes('jsonplaceholder.typicode.com')) {
+      else if (config.baseUrl.includes('jsonplaceholder.typicode.com')) {
         // Try to get the first user
-        await this.fetchData('1', { method: 'GET' });
+        await this.fetchData('1', { method: 'GET' }, applicationId);
       } else {
         // Attempt a simple GET request to verify connection for other APIs
-        await this.fetchData('', { method: 'GET' });
+        await this.fetchData('', { method: 'GET' }, applicationId);
       }
       return true;
     } catch (error) {
@@ -81,12 +93,14 @@ class ApiService {
   }
   
   // Build the full URL
-  private buildUrl(endpoint: string): string {
-    if (!this.config) {
+  private buildUrl(endpoint: string, applicationId?: string): string {
+    const config = applicationId ? this.configStore.get(applicationId) : this.currentConfig;
+    
+    if (!config) {
       throw new Error('API configuration not set');
     }
     
-    let baseUrl = this.config.baseUrl;
+    let baseUrl = config.baseUrl;
     
     // Special handling for DummyJSON API
     if (baseUrl.includes('dummyjson.com')) {
@@ -139,8 +153,10 @@ class ApiService {
   }
   
   // Get authentication headers based on auth type
-  private async getAuthHeaders(): Promise<Record<string, string>> {
-    if (!this.config) {
+  private async getAuthHeaders(applicationId?: string): Promise<Record<string, string>> {
+    const config = applicationId ? this.configStore.get(applicationId) : this.currentConfig;
+    
+    if (!config) {
       throw new Error('API configuration not set');
     }
     
@@ -185,8 +201,10 @@ class ApiService {
     return headers;
   }
   
-  async fetchData(endpoint: string, options: RequestInit = {}): Promise<any> {
-    if (!this.config) {
+  async fetchData(endpoint: string, options: RequestInit = {}, applicationId?: string): Promise<any> {
+    const config = applicationId ? this.configStore.get(applicationId) : this.currentConfig;
+    
+    if (!config) {
       console.error('API configuration not set');
       throw new Error('API configuration not set');
     }
@@ -198,11 +216,11 @@ class ApiService {
     let responseHeaders = {};
     
     try {
-      const url = this.buildUrl(endpoint);
+      const url = this.buildUrl(endpoint, applicationId);
       
       // Only get auth headers if auth type is not 'none' 
-      const requestHeaders = this.config.authType !== 'none' 
-        ? await this.getAuthHeaders()
+      const requestHeaders = config.authType !== 'none' 
+        ? await this.getAuthHeaders(applicationId)
         : { 'Content-Type': 'application/json' };
       
       console.log(`Making API request to: ${url}`);
@@ -236,7 +254,7 @@ class ApiService {
         console.log('JSON response received:', responseData);
         
         // Special handling for DummyJSON API response format
-        if (this.config.baseUrl.includes('dummyjson.com')) {
+        if (config.baseUrl.includes('dummyjson.com')) {
           if (responseData.users && Array.isArray(responseData.users)) {
             // When getting a list of users, return the users array
             responseData = responseData.users;
@@ -254,7 +272,7 @@ class ApiService {
           console.log('Successfully parsed response as JSON despite content-type');
           
           // Special handling for DummyJSON API response format
-          if (this.config.baseUrl.includes('dummyjson.com')) {
+          if (config.baseUrl.includes('dummyjson.com')) {
             if (responseData.users && Array.isArray(responseData.users)) {
               // When getting a list of users, return the users array
               responseData = responseData.users;
@@ -279,14 +297,15 @@ class ApiService {
         timestamp: Date.now(),
         method: options.method || 'GET',
         endpoint,
-        baseUrl: this.config.baseUrl,
+        baseUrl: config.baseUrl,
         status,
         duration,
         success,
         requestData: options.body ? JSON.parse(options.body.toString()) : undefined,
         responseData,
         requestHeaders,
-        responseHeaders
+        responseHeaders,
+        applicationId
       });
       
       return responseData;
@@ -299,14 +318,15 @@ class ApiService {
         timestamp: Date.now(),
         method: options.method || 'GET',
         endpoint,
-        baseUrl: this.config?.baseUrl,
+        baseUrl: config?.baseUrl,
         status,
         duration,
         success,
         requestData: options.body ? JSON.parse(options.body.toString()) : undefined,
         responseData,
         requestHeaders: options.headers as Record<string, string>,
-        responseHeaders
+        responseHeaders,
+        applicationId
       });
       
       toast.error('API request failed', {
@@ -326,14 +346,21 @@ class ApiService {
     }
   }
   
-  // Get the request history
-  getHistory(): APIHistory[] {
+  // Get the request history, optionally filtered by applicationId
+  getHistory(applicationId?: string): APIHistory[] {
+    if (applicationId) {
+      return this.history.filter(item => item.applicationId === applicationId);
+    }
     return this.history;
   }
   
-  // Clear the request history
-  clearHistory(): void {
-    this.history = [];
+  // Clear the request history, optionally for a specific application
+  clearHistory(applicationId?: string): void {
+    if (applicationId) {
+      this.history = this.history.filter(item => item.applicationId !== applicationId);
+    } else {
+      this.history = [];
+    }
   }
 }
 
