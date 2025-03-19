@@ -18,7 +18,7 @@ export interface APIHistory {
 // API configuration interface
 export interface APIConfig {
   baseUrl: string;
-  authType: 'none' | 'basic' | 'bearer' | 'custom';
+  authType: 'none' | 'basic' | 'bearer' | 'custom' | 'apiKey' | 'oauth';
   username?: string;
   password?: string;
   token?: string;
@@ -120,6 +120,12 @@ class ApiService {
         if (this.config.apiKey) {
           // Commonly used as a query parameter or header
           headers['X-API-Key'] = this.config.apiKey;
+        }
+        break;
+        
+      case 'oauth':
+        if (this.config.token) {
+          headers['Authorization'] = `Bearer ${this.config.token}`;
         }
         break;
     }
